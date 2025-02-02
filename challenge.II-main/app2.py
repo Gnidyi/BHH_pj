@@ -11,6 +11,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Dictionary to track user states (e.g., awaiting customer type)
 user_states = {}
+user_chat_files = {}
 global chat_file_path
 
 #States - klappen wie 'Standby' dingster. Also warten auf input.
@@ -69,6 +70,7 @@ def ask_openai(question):
 def start_chat():
     user_id = request.sid
     user_states[user_id] = STATE_WAITING_FOR_CUSTOMER_TYPE  # Set the state to waiting for customer type
+    user_chat_files[user_id] = create_chat_file()
     emit('bot_response', {'response': "Herzlich Willkommen beim BUGLAND Supportchatbot!"})
     time.sleep(0.75)
     emit('bot_response', {'response': "Bist du ein Privatkunde oder ein Geschäftskunde? (Privat/Gewerbe)"})
@@ -77,11 +79,17 @@ def start_chat():
 def handle_message(data):
     user_message = data.get('message')
     user_id = request.sid
-    chat_file_path = create_chat_file()
+    ticket_responses = []
 
     if not user_message:
         emit('bot_response', {'response': 'No message received!'})
         return
+
+    chat_file_path = user_chat_files.get(user_id)
+
+    if not chat_file_path:
+        chat_file_path = create_chat_file()
+        user_chat_files[user_id] = chat_file_path
 
     write_ticket(chat_file_path, f"User: {user_message}")
 
@@ -91,121 +99,194 @@ def handle_message(data):
     if current_state == STATE_WAITING_FOR_CUSTOMER_TYPE:
         # Process customer type (Privat/Gewerbe)
         if user_message.lower() not in ['privat', 'gewerbe', 'exit']:
-            emit('bot_response', {'response': "Ungültige Eingabe! Bitte gib 'Privat' oder 'Gewerbe' ein."})
+            response = "Ungültige Eingabe! Bitte gib 'Privat' oder 'Gewerbe' ein."
+            emit('bot_response', {'response': response})
+            write_ticket(chat_file_path, f"Bot: {response}")
             return
 
         if user_message.lower() == 'privat':
-            emit('bot_response', {'response': "Vielen Dank!"})
-            user_states[user_id] = STATE_WAITING_FOR_DEVICE_CHOICE  # Proceed to device choice
-            emit('bot_response', {'response': "Bitte wähle dein Gerät:"})
-            emit('bot_response', {'response': "1. CleanBug\n2. WindowFly\n3. GardenBeetle"})
+            response = "Vielen Dank!"
+            emit('bot_response', {'response': response})
+            write_ticket(chat_file_path, f"Bot: {response}")
+
+            user_states[user_id] = STATE_WAITING_FOR_DEVICE_CHOICE
+            response = "Bitte wähle dein Gerät:"
+            emit('bot_response', {'response': response})
+            write_ticket(chat_file_path, f"Bot: {response}")
+
+            response = "1. CleanBug\n2. WindowFly\n3. GardenBeetle"
+            emit('bot_response', {'response': response})
+            write_ticket(chat_file_path, f"Bot: {response}")
             return
+
         elif user_message.lower() == 'gewerbe':
-            emit('bot_response', {
-                'response': "Vielen Dank für deine Eingabe! Du hast als Geschäftskunde einen persönlichen Ansprechpartner."})
+            response = "Vielen Dank für deine Eingabe! Du hast als Geschäftskunde einen persönlichen Ansprechpartner."
+            emit('bot_response', {'response': response})
+            write_ticket(chat_file_path, f"Bot: {response}")
+
             user_states[user_id] = STATE_WAITING_FOR_CHATBOT_USE
-            emit('bot_response', {'response': "Möchtest du dennoch den Chatbot verwenden? (Ja/Nein)"})
+            response = "Möchtest du dennoch den Chatbot verwenden? (Ja/Nein)"
+            emit('bot_response', {'response': response})
+            write_ticket(chat_file_path, f"Bot: {response}")
             return
+
         elif user_message.lower() == 'exit':
-            emit('bot_response', {'response': "Vielen Dank für die Nutzung unseres Chats!"})
+            response = "Vielen Dank für die Nutzung unseres Chats!"
+            emit('bot_response', {'response': response})
+            write_ticket(chat_file_path, f"Bot: {response}")
             user_states[user_id] = None
             return
 
+
     elif current_state == STATE_WAITING_FOR_DEVICE_CHOICE:
-        # Process device choice (CleanBug, WindowFly, GardenBeetle)
+
         if user_message not in ['1', '2', '3', 'exit']:
-            emit('bot_response', {'response': "Ungültige Eingabe! Bitte gib eine gültige Geräte-Nummer ein."})
+            response = "Ungültige Eingabe! Bitte gib eine gültige Geräte-Nummer ein."
+
+            emit('bot_response', {'response': response})
+
+            write_ticket(chat_file_path, f"Bot: {response}")
+
             return
 
         if user_message == '1':
-            emit('bot_response', {'response': "Du hast 'CleanBug' gewählt."})
+            response = "Du hast 'CleanBug' gewählt."
         elif user_message == '2':
-            emit('bot_response', {'response': "Du hast 'WindowFly' gewählt."})
+            response = "Du hast 'WindowFly' gewählt."
         elif user_message == '3':
-            emit('bot_response', {'response': "Du hast 'GardenBeetle' gewählt."})
+            response = "Du hast 'GardenBeetle' gewählt."
+
+        emit('bot_response', {'response': response})
+        write_ticket(chat_file_path, f"Bot: {response}")
 
         user_states[user_id] = STATE_WAITING_FOR_PROBLEM_CHOICE
-        emit('bot_response', {'response': "Was ist das Problem mit deinem Gerät?"})
-        emit('bot_response',
-             {'response': "1. Konfiguration\n2. Defekt\n3. Fehlermeldung\n4. Fehlverhalten des Roboters\n5. Sonstiges"})
+        response = "Was ist das Problem mit deinem Gerät?"
+        emit('bot_response', {'response': response})
+        write_ticket(chat_file_path, f"Bot: {response}")
+
+        response = "1. Konfiguration\n2. Defekt\n3. Fehlermeldung\n4. Fehlverhalten des Roboters\n5. Sonstiges"
+        emit('bot_response', {'response': response})
+        write_ticket(chat_file_path, f"Bot: {response}")
         return
 
     elif current_state == STATE_WAITING_FOR_PROBLEM_CHOICE:
-        # Process problem choice (Konfiguration, Defekt, Fehlermeldung, Fehlverhalten, Sonstiges)
         if user_message not in ['1', '2', '3', '4', '5', 'exit']:
-            emit('bot_response', {'response': "Ungültige Eingabe! Bitte gib eine gültige Problem-Nummer ein."})
+            response = "Ungültige Eingabe! Bitte gib eine gültige Problem-Nummer ein."
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
+            write_ticket(chat_file_path, '\n'.join(ticket_responses))  # Store ticket responses
             return
 
-        # Handle problem based on user's choice
         if user_message == '1' or user_message.lower() == "konfiguration":
-            emit('bot_response', { 'response': openai_pr("Mein Roboter hat ein Konfigurationsproblem. Was soll ich nun machen?")})
-            print(openai_pr("Mein Roboter hat ein Konfigurationsproblem. Was soll ich nun machen?"))
+            response = openai_pr("Mein Roboter hat ein Konfigurationsproblem. Was soll ich nun machen?")
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
         elif user_message == '2' or user_message.lower() == "defekt":
-            emit('bot_response', { 'response': openai_pr("Ich glaub mein Roboter ist defekt. Was soll ich nun machen?")})
+            response = openai_pr("Ich glaub mein Roboter ist defekt. Was soll ich nun machen?")
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
         elif user_message == '3' or user_message.lower() == "fehlermeldung":
-            emit('bot_response', { 'response': openai_pr("Ich habe einen Roboter und er zeigt eine Fehlermeldung an. Was soll ich nun machen?")})
+            response = openai_pr("Ich habe einen Roboter und er zeigt eine Fehlermeldung an. Was soll ich nun machen?")
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
         elif user_message == '4' or user_message.lower() == "fehlverhalten des roboters":
-            emit('bot_response', { 'response': openai_pr("Der Roboter funktioniert nicht so wie er soll. Was soll ich nun machen?")})
+            response = openai_pr("Der Roboter funktioniert nicht so wie er soll. Was soll ich nun machen?")
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
         elif user_message == '5' or user_message.lower() == "sonstiges":
-            emit('bot_response', {'response': "Du hast 'Sonstiges' gewählt."})
-            emit('bot_response', {'response': "Bitte schildere dein Problem:"})
+            response = "Du hast 'Sonstiges' gewählt. Bitte schildere dein Problem:"
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
             user_states[user_id] = STATE_WAITING_FOR_PROBLEM_DESCRIPTION  # Proceed to problem description
+            write_ticket(chat_file_path, '\n'.join(ticket_responses))  # Store ticket responses
             return
         elif user_message.lower() == "exit":
+            response = "Chat beendet. Vielen Dank für die Nutzung unseres Chats!"
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
             user_states[user_id] = None  # Reset state and end the chat
-            emit('bot_response', {'response': "Chat beendet. Vielen Dank für die Nutzung unseres Chats!"})
+            write_ticket(chat_file_path, '\n'.join(ticket_responses))  # Store ticket responses
             return
-        emit('bot_response',
-             {'response': "Alternativ kontaktiere den Support unter folgender Telefonnummer oder E-Mail."})
-        emit('bot_response', {'response': "Telefonnummer: 0123456789\nE-Mail: supp.bt@bugland.de"})
+
+        response = "Alternativ kontaktiere den Support unter folgender Telefonnummer oder E-Mail."
+        ticket_responses.append(f"Bot: {response}")
+        emit('bot_response', {'response': response})
+        response = "Telefonnummer: 0123456789\nE-Mail: supp.bt@bugland.de"
+        ticket_responses.append(f"Bot: {response}")
+        emit('bot_response', {'response': response})
         time.sleep(5)
 
-        emit('bot_response',
-             {'response': "Brauchen Sie noch hilfe? (Ja/Nein)"})
+        response = "Brauchen Sie noch hilfe? (Ja/Nein)"
+        ticket_responses.append(f"Bot: {response}")
+        emit('bot_response', {'response': response})
         user_states[user_id] = "waiting_for_restart_choice"
+        write_ticket(chat_file_path, '\n'.join(ticket_responses))  # Store ticket responses
         return
 
     elif current_state == "waiting_for_restart_choice":
         if user_message.lower() == "ja":
             user_states[user_id] = STATE_WAITING_FOR_DEVICE_CHOICE
-            emit('bot_response', {'response': "Bitte wähle dein Gerät:"})
-            emit('bot_response', {'response': "1. CleanBug\n2. WindowFly\n3. GardenBeetle"})
+            response = "Bitte wähle dein Gerät:\n1. CleanBug\n2. WindowFly\n3. GardenBeetle"
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
         elif user_message.lower() == "nein":
-            emit('bot_response', {'response': "Vielen Dank für die Nutzung unseres Chats!"})
+            response = "Vielen Dank für die Nutzung unseres Chats!"
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
             user_states[user_id] = None
         else:
-            emit('bot_response', {'response': "Ungültige Eingabe! Bitte gib 'Gerät' oder 'Exit' ein."})
+            response = "Ungültige Eingabe! Bitte gib 'Gerät' oder 'Exit' ein."
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
+
+        write_ticket(chat_file_path, '\n'.join(ticket_responses))  # Store ticket responses
+        return
 
     elif current_state == STATE_WAITING_FOR_PROBLEM_DESCRIPTION:
         problem_description = user_message
-        emit('bot_response', {'response': openai_pr(problem_description)})
+        response = openai_pr(problem_description)
+        ticket_responses.append(f"Bot: {response}")
+        emit('bot_response', {'response': response})
 
         # Nach weiteren Problemen fragen
         time.sleep(2)
-        emit('bot_response', {'response': "Brauchen Sie noch weitere Hilfe? (Ja/Nein)"})
+        response = "Brauchen Sie noch weitere Hilfe? (Ja/Nein)"
+        ticket_responses.append(f"Bot: {response}")
+        emit('bot_response', {'response': response})
         user_states[user_id] = "waiting_for_restart_choice"
+        write_ticket(chat_file_path, '\n'.join(ticket_responses))  # Store ticket responses
         return
 
     elif current_state == STATE_WAITING_FOR_CHATBOT_USE:
         if user_message.lower() == 'ja':
             user_states[user_id] = STATE_WAITING_FOR_DEVICE_CHOICE
-            emit('bot_response', {'response': "Bitte wähle dein Gerät:"})
-            emit('bot_response', {'response': "1. CleanBug\n2. WindowFly\n3. GardenBeetle"})
+            response = "Bitte wähle dein Gerät:\n1. CleanBug\n2. WindowFly\n3. GardenBeetle"
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
         elif user_message.lower() == 'nein':
-            emit('bot_response', {'response': "Vielen Dank für die Nutzung unseres Chats!"})
-            emit('bot_response',
-                 {'response': "Alternativ kontaktiere den Support unter folgender Telefonnummer oder E-Mail:"})
-            emit('bot_response', {'response': "Telefonnummer: 0123456789\nE-Mail: supp.bt@bugland.de"})
+            response = "Vielen Dank für die Nutzung unseres Chats!"
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
+            response = "Alternativ kontaktiere den Support unter folgender Telefonnummer oder E-Mail:"
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
+            response = "Telefonnummer: 0123456789\nE-Mail: supp.bt@bugland.de"
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
             user_states[user_id] = None  # End the chat
         else:
-            # Handle invalid input for "Ja/Nein"
-            emit('bot_response', {'response': "Ungültige Eingabe! Bitte gib 'Ja' oder 'Nein' ein."})
+            response = "Ungültige Eingabe! Bitte gib 'Ja' oder 'Nein' ein."
+            ticket_responses.append(f"Bot: {response}")
+            emit('bot_response', {'response': response})
 
+        write_ticket(chat_file_path, '\n'.join(ticket_responses))  # Store ticket responses
         return
     else:
-        # wenn kein specific state, nach general input fragen
-        emit('bot_response', {'response': "Ich habe dich nicht verstanden. Bitte versuche es noch einmal."})
-
+        # Wenn kein spezifischer Zustand, nach allgemeinem Input fragen
+        response = "Ich habe dich nicht verstanden. Bitte versuche es noch einmal."
+        ticket_responses.append(f"Bot: {response}")
+        emit('bot_response', {'response': response})
+        write_ticket(chat_file_path, '\n'.join(ticket_responses))  # Store ticket responses
 
 # Handling chat disconnection
 @socketio.on('disconnect')
@@ -215,8 +296,6 @@ def disconnect():
         del user_states[user_id]
     emit('bot_response', {'response': "Chat beendet. Vielen Dank für die Nutzung unseres Chats!"})
 
-
-# Get problem choices for the chatbot
 
 # Function to call OpenAI API and get response
 def openai_pr(inp):

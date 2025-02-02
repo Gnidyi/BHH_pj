@@ -232,13 +232,13 @@
     <h1>Unsere Produkte:</h1>
 
     <div class="bot" id="chatbotButton">
-        <img src="challenge.II-main/templates/th-removebg-preview.png" class="foto" id="botImg">
+        <img src="{{ url_for('static', filename='Bilder/th-removebg-preview.png') }}" class="foto" id="botImg">
     </div>
 
     <div class="product-container">
-        <img src="Bilder/Rasen.png" class="product1" id="product1">
-        <img src="Bilder/Bodenputzer.png" class="product2" id="product2">
-        <img src="Bilder/Fenster.png" class="product3" id="product3">
+        <img src="{{ url_for('static', filename='Bilder/Rasen.png') }}" class="product1" id="product1">
+        <img src="{{ url_for('static', filename='Bilder/Bodenputzer.png') }}" class="product2" id="product2">
+        <img src="{{ url_for('static', filename='bilder/Fenster.png') }}" class="product3" id="product3">
     </div>
 
     <div class="image-text" id="imageText1">Dies ist unser fantastischer Gardenbeetle <br> 1.499€ </div>
